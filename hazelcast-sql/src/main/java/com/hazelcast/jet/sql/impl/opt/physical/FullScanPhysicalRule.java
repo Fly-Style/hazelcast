@@ -76,7 +76,16 @@ final class FullScanPhysicalRule extends ConverterRule {
             //noinspection CollectionAddAllCanBeReplacedWithConstructor
             transforms.addAll(indexScans);
 
+            if (transforms.isEmpty() && table.isHd()) {
+                RelNode indexScan = JetIndexResolver.createFullIndexScan(logicalScan, indexes);
+
+                if (indexScan != null) {
+                    transforms.add(indexScan);
+                }
+            }
+
             // Produce simple map scan if Calcite haven't produce index scan.
+            // If we have HD-based scan, it will fail during plan creation.
             if (transforms.isEmpty()) {
                 transforms.add(convert(rel));
             }

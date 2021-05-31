@@ -920,11 +920,7 @@ public final class JetIndexResolver {
      * @param indexes      available indexes
      * @return index scan or {@code null}
      */
-    public static RelNode createFullIndexScan(
-            FullScanLogicalRel scan,
-            DistributionTrait distribution,
-            List<MapTableIndex> indexes
-    ) {
+    public static RelNode createFullIndexScan(FullScanLogicalRel scan, List<MapTableIndex> indexes) {
         MapTableIndex firstIndex = null;
 
         for (MapTableIndex index : indexes) {
