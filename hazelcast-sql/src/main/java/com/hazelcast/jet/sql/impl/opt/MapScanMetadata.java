@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-package com.hazelcast.sql.impl.plan.node;
+package com.hazelcast.jet.sql.impl.opt;
 
 import com.hazelcast.internal.serialization.impl.SerializationUtil;
+import com.hazelcast.jet.sql.impl.JetSqlSerializerHook;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
@@ -161,6 +162,6 @@ public class MapScanMetadata implements IdentifiedDataSerializable {
 
     @Override
     public int getClassId() {
-        return SqlDataSerializerHook.MAP_SCAN_METADATA;
+        return JetSqlSerializerHook.IMAP_SCAN_METADATA;
     }
 }
