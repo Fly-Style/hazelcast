@@ -29,8 +29,6 @@ import com.hazelcast.jet.sql.impl.connector.keyvalue.KvMetadataResolvers;
 import com.hazelcast.jet.sql.impl.connector.keyvalue.KvProcessors;
 import com.hazelcast.jet.sql.impl.connector.keyvalue.KvRowProjector;
 import com.hazelcast.jet.sql.impl.inject.UpsertTargetDescriptor;
-import com.hazelcast.jet.sql.impl.opt.MapIndexScanMetadata;
-import com.hazelcast.jet.sql.impl.opt.MapScanMetadata;
 import com.hazelcast.jet.sql.impl.schema.MappingField;
 import com.hazelcast.map.impl.MapContainer;
 import com.hazelcast.map.impl.MapService;
@@ -145,7 +143,8 @@ public class IMapSqlConnector implements SqlConnector {
             @Nonnull DAG dag,
             @Nonnull Table table0,
             @Nullable Expression<Boolean> filter,
-            @Nonnull List<Expression<?>> projection) {
+            @Nonnull List<Expression<?>> projection
+    ) {
         PartitionedMapTable table = (PartitionedMapTable) table0;
         MapScanMetadata mapScanMetadata = new MapScanMetadata(
                 table.getMapName(),
@@ -157,7 +156,7 @@ public class IMapSqlConnector implements SqlConnector {
                 filter
         );
 
-        return dag.newUniqueVertex(table.getMapName(), OnHeapMapScanP.onHeapMapScanP(mapScanMetadata));
+        return dag.newUniqueVertex(toString(table), OnHeapMapScanP.onHeapMapScanP(mapScanMetadata));
     }
 
     public Vertex indexScanReader(
@@ -191,10 +190,11 @@ public class IMapSqlConnector implements SqlConnector {
                 ascs
         );
 
+        // Local parallelism required to be 1, because it's impossible to split the index scan.
         return dag.newUniqueVertex(
-                "Index(" + table.getMapName() + ")",
+                "Index(" + toString(table) + ")",
                 OnHeapMapIndexScanP.onHeapMapIndexScanP(indexScanMetadata)
-        );
+        ).localParallelism(1);
     }
 
     @Nonnull
