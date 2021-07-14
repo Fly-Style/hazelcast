@@ -16,6 +16,7 @@
 
 package com.hazelcast.jet.sql.impl.opt.logical;
 
+import com.hazelcast.jet.sql.impl.opt.ExpressionValues;
 import com.hazelcast.sql.impl.schema.map.PartitionedMapTable;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptCost;
@@ -27,39 +28,38 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelWriter;
 import org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.apache.calcite.rel.type.RelDataType;
-import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.SqlKind;
 
 import java.util.List;
 
-public class DeleteByKeyMapLogicalRel extends AbstractRelNode implements LogicalRel {
+public class InsertMapLogicalRel extends AbstractRelNode implements LogicalRel {
 
     private final PartitionedMapTable table;
-    private final RexNode keyCondition;
+    private final ExpressionValues values;
 
-    DeleteByKeyMapLogicalRel(
+    InsertMapLogicalRel(
             RelOptCluster cluster,
             RelTraitSet traitSet,
             PartitionedMapTable table,
-            RexNode keyCondition
+            ExpressionValues values
     ) {
         super(cluster, traitSet);
 
         this.table = table;
-        this.keyCondition = keyCondition;
+        this.values = values;
     }
 
     public PartitionedMapTable table() {
         return table;
     }
 
-    public RexNode keyCondition() {
-        return keyCondition;
+    public ExpressionValues values() {
+        return values;
     }
 
     @Override
     public RelDataType deriveRowType() {
-        return RelOptUtil.createDmlRowType(SqlKind.DELETE, getCluster().getTypeFactory());
+        return RelOptUtil.createDmlRowType(SqlKind.INSERT, getCluster().getTypeFactory());
     }
 
     @Override
@@ -71,11 +71,11 @@ public class DeleteByKeyMapLogicalRel extends AbstractRelNode implements Logical
     public RelWriter explainTerms(RelWriter pw) {
         return pw
                 .item("table", table.getSqlName())
-                .item("keyCondition", keyCondition);
+                .item("values", values);
     }
 
     @Override
     public RelNode copy(RelTraitSet traitSet, List<RelNode> inputs) {
-        return new DeleteByKeyMapLogicalRel(getCluster(), traitSet, table, keyCondition);
+        return new InsertMapLogicalRel(getCluster(), traitSet, table, values);
     }
 }
