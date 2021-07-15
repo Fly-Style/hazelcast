@@ -28,6 +28,7 @@ import com.hazelcast.jet.sql.impl.opt.physical.PhysicalRules;
 import com.hazelcast.jet.sql.impl.schema.MappingCatalog;
 import com.hazelcast.jet.sql.impl.schema.MappingStorage;
 import com.hazelcast.spi.impl.NodeEngineImpl;
+import com.hazelcast.sql.impl.ParameterConverter;
 import com.hazelcast.sql.impl.QueryParameterMetadata;
 import com.hazelcast.sql.impl.QueryUtils;
 import com.hazelcast.sql.impl.calcite.HazelcastSqlBackend;
@@ -38,6 +39,7 @@ import com.hazelcast.sql.impl.calcite.schema.HazelcastSchema;
 import com.hazelcast.sql.impl.calcite.schema.HazelcastSchemaUtils;
 import com.hazelcast.sql.impl.calcite.schema.HazelcastTable;
 import com.hazelcast.sql.impl.calcite.schema.HazelcastTableStatistic;
+import com.hazelcast.sql.impl.calcite.validate.param.StrictParameterConverter;
 import com.hazelcast.sql.impl.schema.ConstantTableStatistics;
 import com.hazelcast.sql.impl.schema.TableField;
 import com.hazelcast.sql.impl.schema.map.MapTableIndex;
@@ -48,6 +50,7 @@ import org.apache.calcite.plan.RelTraitSet;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.sql.SqlExplainLevel;
 import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql.parser.SqlParserPos;
 
 import java.io.BufferedReader;
 import java.io.StringReader;
@@ -69,16 +72,45 @@ public abstract class OptimizerTestSupport extends SimpleTestInClusterSupport {
     protected RelNode optimizeLogical(String sql, HazelcastTable... tables) {
         HazelcastSchema schema =
                 new HazelcastSchema(stream(tables).collect(toMap(table -> table.getTarget().getSqlName(), identity())));
-        return optimize(sql, schema, false).getLogical();
+        return optimize(sql, false, schema, null, false).getLogical();
     }
 
-    protected RelNode optimizePhysical(String sql, HazelcastTable... tables) {
+    protected RelNode optimizeLogical(String sql, boolean requiresJob, HazelcastTable... tables) {
         HazelcastSchema schema =
                 new HazelcastSchema(stream(tables).collect(toMap(table -> table.getTarget().getSqlName(), identity())));
-        return optimize(sql, schema, true).getPhysical();
+        return optimize(sql, requiresJob, schema, null, false).getLogical();
     }
 
-    protected static Result optimize(String sql, HazelcastSchema schema, boolean shouldOptimizePhysical) {
+    protected RelNode optimizePhysical(
+            String sql,
+            boolean requiresJob,
+            List<QueryDataType> types,
+            HazelcastTable... tables) {
+        HazelcastSchema schema =
+                new HazelcastSchema(stream(tables).collect(toMap(table -> table.getTarget().getSqlName(), identity())));
+
+        QueryParameterMetadata parameterMetadata;
+
+        if (types == null || types.size() == 0) {
+            parameterMetadata = null;
+        } else {
+            ParameterConverter[] parameterConverters = new ParameterConverter[types.size()];
+
+            for (int i = 0; i < types.size(); i++) {
+                parameterConverters[i] = new StrictParameterConverter(0, SqlParserPos.ZERO, types.get(i));
+            }
+
+            parameterMetadata = new QueryParameterMetadata(parameterConverters);
+        }
+        return optimize(sql, requiresJob, schema, parameterMetadata, true).getPhysical();
+    }
+
+    protected static Result optimize(
+            String sql,
+            boolean requiresJob,
+            HazelcastSchema schema,
+            QueryParameterMetadata queryParameterMetadata,
+            boolean shouldOptimizePhysical) {
         HazelcastInstance instance = instance();
         NodeEngineImpl nodeEngine = getNodeEngineImpl(instance);
         MappingStorage mappingStorage = new MappingStorage(nodeEngine);
@@ -94,11 +126,15 @@ public abstract class OptimizerTestSupport extends SimpleTestInClusterSupport {
                 new HazelcastSqlBackend(nodeEngine),
                 new JetSqlBackend(nodeEngine, planExecutor)
         );
-
-        return optimize(sql, context, shouldOptimizePhysical);
+        context.setRequiresJob(requiresJob);
+        return optimize(sql, context, queryParameterMetadata, shouldOptimizePhysical);
     }
 
-    private static Result optimize(String sql, OptimizerContext context, boolean shouldOptimizePhysical) {
+    private static Result optimize(
+            String sql,
+            OptimizerContext context,
+            QueryParameterMetadata queryParameterMetadata,
+            boolean shouldOptimizePhysical) {
         QueryParseResult parseResult = context.parse(sql);
 
         SqlNode node = parseResult.getNode();
@@ -106,7 +142,7 @@ public abstract class OptimizerTestSupport extends SimpleTestInClusterSupport {
         LogicalRel logicalRel = optimizeLogicalInternal(context, convertedRel);
         PhysicalRel physicalRel = null;
         if (shouldOptimizePhysical) {
-            physicalRel = optimizePhysicalInternal(context, logicalRel, context.getCluster().getParameterMetadata());
+            physicalRel = optimizePhysicalInternal(context, logicalRel, queryParameterMetadata);
         }
 
         return new Result(node, convertedRel, logicalRel, physicalRel);

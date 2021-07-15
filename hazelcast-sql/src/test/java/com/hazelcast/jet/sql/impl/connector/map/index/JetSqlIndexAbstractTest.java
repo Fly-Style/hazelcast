@@ -35,7 +35,6 @@ import com.hazelcast.sql.impl.type.QueryDataType;
 import com.hazelcast.sql.support.expressions.ExpressionBiValue;
 import com.hazelcast.sql.support.expressions.ExpressionType;
 import com.hazelcast.sql.support.expressions.ExpressionValue;
-import org.apache.calcite.rel.RelNode;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -132,8 +131,8 @@ public abstract class JetSqlIndexAbstractTest extends OptimizerTestSupport {
 
     @Test
     public void test() {
-//        checkFirstColumn();
-//        checkSecondColumn();
+        checkFirstColumn();
+        checkSecondColumn();
         checkBothColumns();
     }
 
@@ -465,6 +464,8 @@ public abstract class JetSqlIndexAbstractTest extends OptimizerTestSupport {
     }
 
     private void checkPlan(boolean withIndex, String sql) {
+        final boolean requiresJob = false;
+        List<QueryDataType> types = asList(QueryDataType.INT, f1.getFieldConverterType(), f2.getFieldConverterType());
         List<TableField> mapTableFields = asList(
                 new MapTableField("__key", QueryDataType.INT, false, QueryPath.KEY_PATH),
                 new MapTableField("field1", f1.getFieldConverterType(), false, new QueryPath("field1", false)),
@@ -478,13 +479,10 @@ public abstract class JetSqlIndexAbstractTest extends OptimizerTestSupport {
                 map.size()
         );
         assertPlan(optimizeLogical(sql, table), plan(planRow(0, FullScanLogicalRel.class)));
-
-        RelNode relNode = optimizePhysical(sql, table);
-        System.err.println(relNode.toString());
         if (withIndex) {
-            assertPlan(optimizePhysical(sql, table), plan(planRow(0, IndexScanMapPhysicalRel.class)));
+            assertPlan(optimizePhysical(sql, requiresJob, types, table), plan(planRow(0, IndexScanMapPhysicalRel.class)));
         } else {
-            assertPlan(optimizePhysical(sql, table), plan(planRow(0, FullScanPhysicalRel.class)));
+            assertPlan(optimizePhysical(sql, requiresJob, types, table), plan(planRow(0, FullScanPhysicalRel.class)));
         }
     }
 
